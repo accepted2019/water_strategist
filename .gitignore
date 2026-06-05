@@ -1,0 +1,15 @@
+build/
+_deps/
+sdl2_mingw/
+*.exe
+*.dll
+*.obj
+*.o
+config.ini
+.vs/
+.vscode/
+.idea/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile

@@ -1,0 +1,16 @@
+[gemini]
+api_key = YOUR_GEMINI_API_KEY_HERE
+model = gemini-1.5-flash
+timeout_seconds = 5
+
+[voice]
+rate = 0
+volume = 100
+mute_g_threshold = 1.5
+
+[ui]
+fullscreen = false
+
+[gamepad]
+tr_button = a
+deadzone = 0.1
