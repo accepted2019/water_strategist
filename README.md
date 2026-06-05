@@ -3,8 +3,8 @@ WaterStrategist
 
 # WaterStrategist — C++ 开发报告
 
-**日期**: 2026-06-05  
-**版本**: blueprint 1.0
+**日期**: 2026-06-06  
+**版本**: v1.1
 **状态**: 构建成功，可运行
 
 ---
@@ -13,7 +13,8 @@ WaterStrategist
 
 将 Python/Streamlit 原型重写为纯 C++ 原生 Windows 桌面应用，为 Steam 分发做准备。  
 核心功能：遥测数据 → Gemini AI 策略分析 → 语音播报。  
-UI 采用 F1 专业风格（碳纤维黑 + 遥测绿 + 警告红），TR 按钮 40x40px。
+UI 采用 F1 专业风格（碳纤维黑 + 遥测绿 + 警告红），TR 按钮 40x40px。  
+v1.1 新增设置页面，支持中英文切换，调试数据迁入设置面板。
 
 **原型（Python）**: `F:\water_strategist_demo`  
 **C++ 项目**: `F:\water_strategist`  
@@ -47,11 +48,13 @@ F:\water_strategist\
 ├── sdl2_mingw/                 # SDL2 预编译 MinGW 二进制文件
 │   └── SDL2-2.30.0/
 ├── src/
-│   ├── main.cpp                # SDL 初始化, 主循环, 事件分发 (344 行)
+│   ├── main.cpp                # SDL 初始化, 主循环, 事件分发, 设置页路由
 │   ├── config.h                # 常量: 窗口/API/音频/UI 配置
+│   ├── i18n.h                  # 中/英语言切换 (L() 内联辅助函数)
 │   ├── ui/
 │   │   ├── theme.h / theme.cpp       # F1 深色 ImGui 主题 + 字体加载
-│   │   ├── dashboard.h / dashboard.cpp # 遥测仪表盘 (3 行布局)
+│   │   ├── dashboard.h / dashboard.cpp # 遥测仪表盘 (含 i18n 标签)
+│   │   ├── settings.h / settings.cpp  # 设置页面 (语言 + 数据调试)
 │   │   └── tr_button.h / tr_button.cpp # "TR" 圆形按钮 (40x40px)
 │   ├── telemetry/
 │   │   ├── frame.h              # TelemetryFrame 数据结构
@@ -73,7 +76,7 @@ F:\water_strategist\
     └── config.ini
 ```
 
-**代码统计**: 12 个 .cpp + 12 个 .h + 1 main.cpp = 1180 行
+**代码统计**: 14 个 .cpp + 13 个 .h + 1 main.cpp
 
 ---
 
@@ -85,9 +88,10 @@ F:\water_strategist\
 - OpenGL 3.0 Core Profile, VSync 开启
 - Dear ImGui 初始化 + F1 主题 + 字体加载
 - 主循环: 事件轮询 → 异步策略检查 → Mute Gate → ImGui 渲染
-- 快捷键: Space = TR, F11 = 全屏, H = 隐藏侧边栏
+- 快捷键: Space = TR, F11 = 全屏, H = 切换设置页, ESC = 退出设置
 - 游戏手柄事件: `SDL_CONTROLLERDEVICEADDED/REMOVED` 钩子
-- 状态管理: g_loading, g_muted, g_queued_text, g_show_demo_controls
+- 状态管理: g_lang, g_show_settings, g_loading, g_muted, g_queued_text
+- 标题栏: 右侧 SETTINGS/设置 按钮 (中英双语)，左键切换 API 状态指示
 
 ### 4.2 UI 模块
 
@@ -97,13 +101,29 @@ F:\water_strategist\
 - 回退链: msyh.ttc → simsun.ttc → ImGui 内置 ProggyClean
 
 **dashboard.cpp — 遥测仪表盘**
-- Row 1 (6 列): DRIVER, TYRE LAPS, GRIP%, DELTA, LAT G, SPEED
-- Row 2 (3 列): FUEL, SECTOR, MUTE GATE 状态
+- Row 1 (6 列): DRIVER/车手, TYRE LAPS/轮胎圈数, GRIP%/抓地力, DELTA/差距, LAT G/横向G力, SPEED/速度
+- Row 2 (3 列): FUEL/燃料, SECTOR/路段, MUTE GATE/静音门限 状态
+- 全标签通过 i18n.h L() 支持中英双语即时切换
+
+**settings.cpp — 设置页面 (v1.1 新增)**
+- 标题栏 SETTINGS/设置 按钮进入，BACK/返回 或 ESC 退出
+- 语言设置 (LANGUAGE/语言设置)：
+  - English / 中文 双按钮，当前语言高亮绿色
+  - 即时切换全局 g_lang 状态，仪表盘 / 设置 / 状态栏全响应
+- 数据调试 (DATA DEBUG/数据调试)：
+  - 车手名、轮胎圈数、抓地力%、差距、横向G力 — 原侧边栏控件移入
+  - Apply/应用 按钮更新遥测快照
+  - 静音阈值 + 手柄连接状态显示
+
+**i18n.h — 轻量国际化 (v1.1 新增)**
+- `enum class Lang { EN, ZH }` + 全局 `extern Lang g_lang`
+- `L("English", "中文")` 内联宏，根据当前语言返回对应字符串
+- 零运行时开销，编译期内联展开
 
 **tr_button.cpp — TR 按钮**
 - 40x40px 圆形按钮, 左下角固定位置
 - 加载态: 旋转绿色圆环 + 动态点数动画
-- 悬浮态: 红色高亮, tooltip "Team Radio — Request strategy via Gemini AI"
+- 悬浮态: 红色高亮, tooltip 多语言
 
 ### 4.3 遥测模块
 
@@ -208,20 +228,32 @@ deadzone = 0.1
 
 ---
 
-## 7. 已知问题 & 待完成
+## 7. 更新日志
+
+### v1.1 (2026-06-06)
+- **新增设置页面**: LANGUAGE/语言设置 + DATA DEBUG/数据调试双面板
+- **i18n 中英双语**: `i18n.h` L() 辅助，仪表盘/设置/状态栏全标签即时切换
+- **侧边栏移入设置**: 原遥测调试控件从侧栏迁至 DATA DEBUG，释放主视图空间
+- **按钮栈平衡修复**: PushStyleColor/PopStyleColor 统一计数，消除 toggle 断言
+- **悬空指针修复**: device_name() 返回值生命周期延长
+
+### v1.0 (2026-06-05)
+- 初始发布，F1 AI 进站策略工程师
+
+---
+
+## 8. 已知问题 & 待完成
 
 | 问题 | 状态 | 计划 |
 |------|------|------|
-| TTS 仅为蜂鸣音 | 已知 | v1.1: 集成 Windows SAPI 完整语音合成 |
-| 字体仅 2500 CJK | 已修复 | 使用 `GetGlyphRangesChineseSimplifiedCommon()` |
-| F1Regular.ttf 缺失 | 已修复 | 改用系统微软雅黑 |
+| TTS 仅为蜂鸣音 | 已知 | v2.0: 集成 Windows SAPI 完整语音合成 |
 | 无单元测试 | 待做 | Phase 7: 添加 Google Test |
 | Steam Overlay 兼容性 | 待验证 | 需 Steam SDK 集成测试 |
 | 手柄 D-Pad/扳机未使用 | 预留 | 接口已定义, 功能待实现 |
 
 ---
 
-## 8. 构建指令
+## 9. 构建指令
 
 ```bash
 # 配置 (使用 Dev-Cpp MinGW64)
@@ -239,7 +271,7 @@ cd build && ./water_strategist.exe
 
 ---
 
-## 9. 编译兼容性
+## 10. 编译兼容性
 
 - **编译器**: g++ 4.9.2 (Dev-Cpp 内置 MinGW64) — C++14
 - **已知限制**: `<cstring>` / `<cstdio>` 中 C 函数仅在全局命名空间, 不在 `std::`
@@ -250,23 +282,25 @@ cd build && ./water_strategist.exe
 
 ---
 
-## 10. 文件清单
+## 11. 文件清单
 
-### 源文件 (1180 行总计)
+### 源文件
 
-| 文件 | 行数 | 职责 |
-|------|------|------|
-| src/main.cpp | 344 | 应用入口, 主循环, 事件分发 |
-| src/config.h | 31 | 全局常量 |
-| src/telemetry/frame.h | 14 | 遥测数据结构 |
-| src/telemetry/mock.cpp | 42 | 模拟遥测生成 |
-| src/net/http.cpp | 117 | WinHTTP POST 封装 |
-| src/strategy/engine.cpp | 99 | Gemini API 调用 + JSON 解析 |
-| src/strategy/prompt.cpp | 22 | AI System Prompt |
-| src/voice/tts.cpp | 57 | 蜂鸣音 PCM 生成 |
-| src/voice/audio.cpp | 62 | SDL 音频队列播放 |
-| src/voice/mute_gate.cpp | 10 | G 力静音闸 |
-| src/ui/theme.cpp | 101 | F1 主题 + 字体加载 |
-| src/ui/dashboard.cpp | 71 | 遥测仪表盘 |
-| src/ui/tr_button.cpp | 61 | TR 圆形按钮 |
-| src/input/gamepad.cpp | 40 | 手柄 GameController |
+| 文件 | 职责 |
+|------|------|
+| src/main.cpp | 应用入口, 主循环, 事件分发, 设置页路由 |
+| src/config.h | 全局常量 |
+| src/i18n.h | 中/英语言切换 (L() 内联辅助) |
+| src/telemetry/frame.h | 遥测数据结构 |
+| src/telemetry/mock.cpp | 模拟遥测生成 |
+| src/net/http.cpp | WinHTTP POST 封装 |
+| src/strategy/engine.cpp | Gemini API 调用 + JSON 解析 |
+| src/strategy/prompt.cpp | AI System Prompt |
+| src/voice/tts.cpp | 蜂鸣音 PCM 生成 |
+| src/voice/audio.cpp | SDL 音频队列播放 |
+| src/voice/mute_gate.cpp | G 力静音闸 |
+| src/ui/theme.cpp | F1 主题 + 字体加载 |
+| src/ui/dashboard.cpp | 遥测仪表盘 (含 i18n) |
+| src/ui/settings.cpp | 设置页面 (语言 + 数据调试) |
+| src/ui/tr_button.cpp | TR 圆形按钮 |
+| src/input/gamepad.cpp | 手柄 GameController |
