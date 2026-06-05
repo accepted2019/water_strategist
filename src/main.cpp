@@ -11,16 +11,21 @@
 #include <chrono>
 
 #include "config.h"
+#include "i18n.h"
 #include "telemetry/frame.h"
 #include "telemetry/mock.h"
 #include "ui/theme.h"
 #include "ui/dashboard.h"
+#include "ui/settings.h"
 #include "ui/tr_button.h"
 #include "strategy/engine.h"
 #include "voice/tts.h"
 #include "voice/audio.h"
 #include "voice/mute_gate.h"
 #include "input/gamepad.h"
+
+// ── Global language state ──
+Lang g_lang = Lang::EN;
 
 // ── App state ──
 static TelemetryFrame        g_telemetry;
@@ -34,7 +39,7 @@ static GamepadManager        g_gamepad;
 static GamepadState          g_gamepad_state;
 static bool                  g_muted = false;
 static std::string           g_queued_text;
-static bool                  g_show_demo_controls = true;
+static bool                  g_show_settings = false;
 
 // ── Sidebar edit buffers ──
 static char  g_driver_buf[64] = "Lewis Hamilton";
@@ -170,7 +175,10 @@ int main(int argc, char* argv[]) {
                         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
                 }
                 if (event.key.keysym.sym == SDLK_h) {
-                    g_show_demo_controls = !g_show_demo_controls;
+                    g_show_settings = !g_show_settings;
+                }
+                if (event.key.keysym.sym == SDLK_ESCAPE && g_show_settings) {
+                    g_show_settings = false;
                 }
                 break;
             }
@@ -236,7 +244,21 @@ int main(int argc, char* argv[]) {
         // ── Title bar ──
         ImGui::TextColored(ImVec4(0.80f, 0.05f, 0.05f, 1.0f), "WATERSTRATEGIST");
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "- AI Pit-Wall Engineer");
+        ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "%s",
+            L("- AI Pit-Wall Engineer", "- AI 进站策略工程师"));
+
+        // Settings button — right side of title bar
+        ImGui::SameLine((float)io.DisplaySize.x - 280);
+        ImGui::PushStyleColor(ImGuiCol_Button,
+            g_show_settings ? ImVec4(0.00f, 0.60f, 0.10f, 1.0f) : ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+            g_show_settings ? ImVec4(0.00f, 0.70f, 0.15f, 1.0f) : ImVec4(0.80f, 0.05f, 0.05f, 1.0f));
+        if (ImGui::Button(L("SETTINGS", "设置"), ImVec2(80, 0))) {
+            g_show_settings = !g_show_settings;
+        }
+        ImGui::PopStyleColor(2);
+
+        // API status
         ImGui::SameLine((float)io.DisplaySize.x - 180);
         ImGui::TextColored(g_api_status.find("DEMO") != std::string::npos
                            ? ImVec4(0.80f, 0.80f, 0.05f, 1.0f)
@@ -245,72 +267,83 @@ int main(int argc, char* argv[]) {
 
         ImGui::Separator();
 
-        // ── Sidebar controls (collapsible) ──
-        if (g_show_demo_controls) {
-            ImGui::BeginChild("##Sidebar", ImVec2(220, 0), true);
-            ImGui::Text("TELEMETRY CONTROLS");
-            ImGui::Separator();
-            ImGui::InputText("Driver", g_driver_buf, sizeof(g_driver_buf));
-            ImGui::SliderInt("Tyre Laps", &g_tire_laps, 0, 30);
-            ImGui::SliderFloat("Grip %%", &g_grip_pct, 0.0f, 100.0f, "%.0f");
-            ImGui::SliderFloat("Delta (s)", &g_delta, 0.0f, 10.0f, "%.1f");
-            ImGui::SliderFloat("Lat G", &g_lateral_g, 0.0f, 3.0f, "%.2f");
-            ImGui::Separator();
-            if (ImGui::Button("Apply", ImVec2(-1, 0))) {
-                update_telemetry();
-            }
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "Mute threshold: %.1f G", config::MUTE_G_THRESHOLD);
-            ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "Space = TR shortcut");
-            ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "F11 = Fullscreen");
-            ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "H = Hide controls");
-            // gamepad status
-            if (g_gamepad.is_connected()) {
-                ImGui::TextColored(ImVec4(0.00f, 0.90f, 0.13f, 1.0f), "CTRL: %s", g_gamepad.device_name().c_str());
-            }
-            ImGui::EndChild();
-            ImGui::SameLine();
-        }
-
         // ── Main content area ──
         ImGui::BeginChild("##Content", ImVec2(0, 0), true);
-        render_dashboard(g_telemetry);
 
-        ImGui::Spacing();
-        ImGui::Separator();
+        if (g_show_settings) {
+            // ── Settings page ──
+            // Back button
+            if (ImGui::Button(L("<- BACK", "<- 返回"), ImVec2(100, 0))) {
+                g_show_settings = false;
+            }
+            ImGui::Spacing();
+            ImGui::Separator();
 
-        // Strategy output display
-        if (!g_strategy_text.empty()) {
-            ImGui::PushFont(io.Fonts->Fonts[0]);
-            ImGui::TextColored(ImVec4(0.80f, 0.05f, 0.05f, 1.0f), "STRATEGIST: ");
-            ImGui::SameLine();
-            ImGui::TextWrapped("%s", g_strategy_text.c_str());
-            ImGui::PopFont();
-        }
+            std::string dev_name;
+            const char* dev_name_ptr = nullptr;
+            if (g_gamepad.is_connected()) {
+                dev_name = g_gamepad.device_name();
+                dev_name_ptr = dev_name.c_str();
+            }
 
-        ImGui::Spacing();
+            bool apply = render_settings_page(
+                g_driver_buf, sizeof(g_driver_buf),
+                &g_tire_laps, &g_grip_pct, &g_delta, &g_lateral_g,
+                (float)config::MUTE_G_THRESHOLD,
+                dev_name_ptr,
+                g_gamepad.is_connected());
+            if (apply) {
+                update_telemetry();
+            }
+        } else {
+            // ── Dashboard view ──
+            render_dashboard(g_telemetry);
 
-        // Status bar
-        ImGui::TextColored(
-            g_muted ? ImVec4(0.80f, 0.05f, 0.05f, 1.0f) : ImVec4(0.35f, 0.35f, 0.35f, 1.0f),
-            "%s", g_status_text.c_str());
+            ImGui::Spacing();
+            ImGui::Separator();
 
-        // Loading indicator
-        if (g_loading) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.00f, 0.90f, 0.13f, 1.0f), " [processing...]");
-        }
+            // Strategy output display
+            if (!g_strategy_text.empty()) {
+                ImGui::PushFont(io.Fonts->Fonts[0]);
+                ImGui::TextColored(ImVec4(0.80f, 0.05f, 0.05f, 1.0f),
+                    L("STRATEGIST: ", "策略建议: "));
+                ImGui::SameLine();
+                ImGui::TextWrapped("%s", g_strategy_text.c_str());
+                ImGui::PopFont();
+            }
 
-        // Audio playing indicator
-        if (audio_is_playing()) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.00f, 0.70f, 0.10f, 1.0f), " [speaking...]");
-        }
+            ImGui::Spacing();
 
-        // ── TR Button ──
-        bool tr_pressed = render_tr_button(g_loading);
-        if (tr_pressed) {
-            on_tr_pressed();
+            // Status bar
+            ImGui::TextColored(
+                g_muted ? ImVec4(0.80f, 0.05f, 0.05f, 1.0f) : ImVec4(0.35f, 0.35f, 0.35f, 1.0f),
+                "%s", g_status_text.c_str());
+
+            // Loading indicator
+            if (g_loading) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.00f, 0.90f, 0.13f, 1.0f),
+                    L(" [processing...]", " [处理中...]"));
+            }
+
+            // Audio playing indicator
+            if (audio_is_playing()) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.00f, 0.70f, 0.10f, 1.0f),
+                    L(" [speaking...]", " [播报中...]"));
+            }
+
+            // Keyboard hints
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f),
+                L("Space = TR  |  F11 = Fullscreen  |  H = Settings",
+                  "空格 = 车队通讯  |  F11 = 全屏  |  H = 设置"));
+
+            // ── TR Button ──
+            bool tr_pressed = render_tr_button(g_loading);
+            if (tr_pressed) {
+                on_tr_pressed();
+            }
         }
 
         ImGui::EndChild();

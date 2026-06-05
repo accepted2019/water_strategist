@@ -56,6 +56,7 @@ set(SOURCES
     src/voice/mute_gate.cpp
     src/ui/theme.cpp
     src/ui/dashboard.cpp
+    src/ui/settings.cpp
     src/ui/tr_button.cpp
     src/input/gamepad.cpp
 )

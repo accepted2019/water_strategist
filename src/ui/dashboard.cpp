@@ -1,4 +1,5 @@
 #include "dashboard.h"
+#include "../i18n.h"
 #include <imgui.h>
 #include <string>
 
@@ -27,17 +28,17 @@ void render_dashboard(const TelemetryFrame& f) {
     ImGui::SetColumnWidth(2, col_w); ImGui::SetColumnWidth(3, col_w);
     ImGui::SetColumnWidth(4, col_w); ImGui::SetColumnWidth(5, col_w);
 
-    big_metric("DRIVER", f.driver);
+    big_metric(L("DRIVER", "车手"), f.driver);
     ImGui::NextColumn();
-    big_metric("TYRE LAPS", std::to_string(f.tire_laps));
+    big_metric(L("TYRE LAPS", "轮胎圈数"), std::to_string(f.tire_laps));
     ImGui::NextColumn();
-    big_metric("GRIP", std::to_string((int)f.grip_remaining_pct), "%");
+    big_metric(L("GRIP", "抓地力"), std::to_string((int)f.grip_remaining_pct), "%");
     ImGui::NextColumn();
-    big_metric("DELTA", std::to_string(f.delta_behind).substr(0, 4), "s");
+    big_metric(L("DELTA", "差距"), std::to_string(f.delta_behind).substr(0, 4), "s");
     ImGui::NextColumn();
-    big_metric("LAT G", std::to_string(f.lateral_g_force).substr(0, 3), "G");
+    big_metric(L("LAT G", "横向G力"), std::to_string(f.lateral_g_force).substr(0, 3), "G");
     ImGui::NextColumn();
-    big_metric("SPEED", std::to_string((int)f.speed_kmh), "km/h");
+    big_metric(L("SPEED", "速度"), std::to_string((int)f.speed_kmh), "km/h");
     ImGui::NextColumn();
     ImGui::Columns(1);
 
@@ -49,18 +50,26 @@ void render_dashboard(const TelemetryFrame& f) {
     ImGui::SetColumnWidth(0, col_w); ImGui::SetColumnWidth(1, col_w);
     ImGui::SetColumnWidth(2, col_w);
 
-    big_metric("FUEL", std::to_string((int)f.fuel_kg), "kg");
+    big_metric(L("FUEL", "燃料"), std::to_string((int)f.fuel_kg), "kg");
     ImGui::NextColumn();
-    big_metric("SECTOR", f.track_section == "corner" ? "CORNER" : "STRAIGHT");
+    {
+        const char* corner = L("CORNER", "弯道");
+        const char* straight = L("STRAIGHT", "直道");
+        big_metric(L("SECTOR", "路段"),
+                   f.track_section == "corner" ? corner : straight);
+    }
     ImGui::NextColumn();
     {
         bool muted = (f.lateral_g_force > 1.5);
         ImGui::BeginGroup();
-        ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "MUTE GATE");
+        ImGui::TextColored(ImVec4(0.35f, 0.35f, 0.35f, 1.0f), "%s",
+            L("MUTE GATE", "静音门限"));
         if (muted) {
-            ImGui::TextColored(ImVec4(0.80f, 0.05f, 0.05f, 1.0f), "ACTIVE");
+            ImGui::TextColored(ImVec4(0.80f, 0.05f, 0.05f, 1.0f), "%s",
+                L("ACTIVE", "激活"));
         } else {
-            ImGui::TextColored(ImVec4(0.00f, 0.90f, 0.13f, 1.0f), "OK");
+            ImGui::TextColored(ImVec4(0.00f, 0.90f, 0.13f, 1.0f), "%s",
+                L("OK", "正常"));
         }
         ImGui::EndGroup();
     }
